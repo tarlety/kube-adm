@@ -5,6 +5,9 @@ if [ "$SSHPORT" == "" ] ; then SSHPORT=${SECRET_SSHPORT} ; fi
 [[ "${SECRET}" == "" ]] && SECRET=~/.secret
 echo SECRET=${SECRET} SSHPORT=$SSHPORT
 
+WEAVE_PASSWORD_FILE=${SECRET}/.kube/weave_password
+[[ -e "$WEAVE_PASSWORD_FILE" ]] && export WEAVE_PASSWORD=$(cat ${WEAVE_PASSWORD_FILE})
+
 case $1 in
 	"preflight")
 		# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
