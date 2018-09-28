@@ -18,8 +18,6 @@ EOF
 		sudo apt install -y kubelet kubeadm kubectl
 		sudo apt-mark hold kubelet kubeadm kubectl
 		sudo swapoff -a
-		#sudo systemctl daemon-reload
-		#sudo systemctl restart kubelet
 		;;
 	"init")
 		mkdir -p ${SECRET}/.kube
