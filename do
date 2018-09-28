@@ -3,7 +3,6 @@
 SECRET_SSHPORT=`cat /etc/ssh/sshd_config| grep '^Port' | cut -d ' ' -f 2 || echo 22`
 if [ "$SSHPORT" == "" ] ; then SSHPORT=${SECRET_SSHPORT} ; fi
 [[ "${SECRET}" == "" ]] && SECRET=~/.secret
-WEAVE_PASSWORD_FILE=${SECRET}/.kube/weave-password
 echo SECRET=${SECRET} SSHPORT=$SSHPORT
 
 case $1 in
@@ -26,10 +25,7 @@ EOF
 		mkdir -p $HOME/.kube
 		sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 		sudo chown $(id -u):$(id -g) $HOME/.kube/config
-		[[ -e "${WEAVE_PASSWORD_FILE}" ]] && \
-			kubectl create secret -n kube-system generic weave-passwd --from-file=${WEAVE_PASSWORD_FILE}
 		kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
-		kubectl edit --namespace=kube-system daemonset weave-net
 		;;
 	"weave-status")
 		kubectl exec -n kube-system `kubectl get pods --all-namespaces | grep weave | sed 's/  */ /g' | cut -d ' ' -f 2` -c weave -- /home/weave/weave --local status
