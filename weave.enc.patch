@@ -1,0 +1,17 @@
+*** weave.yaml  2018-09-28 13:09:39.399703071 +0800
+--- weave.enc.yaml      2018-09-28 13:09:21.527627726 +0800
+***************
+*** 180,185 ****
+--- 180,191 ----
+                resources:
+                  requests:
+                    cpu: 10m
++               env:
++                 - name: WEAVE_PASSWORD
++                   valueFrom:
++                     secretKeyRef:
++                       name: weave-passwd
++                       key: weave-passwd
+                securityContext:
+                  privileged: true
+                volumeMounts:
