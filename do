@@ -3,7 +3,7 @@
 SECRET_SSHPORT=`cat /etc/ssh/sshd_config| grep '^Port' | cut -d ' ' -f 2 || echo 22`
 if [ "$SSHPORT" == "" ] ; then SSHPORT=${SECRET_SSHPORT} ; fi
 [[ "${SECRET}" == "" ]] && SECRET=~/.secret
-WEAVE_PASSWORD_FILE=${SECRET}/.kube/weave_password
+WEAVE_PASSWORD_FILE=${SECRET}/.kube/weave-password
 echo SECRET=${SECRET} SSHPORT=$SSHPORT
 
 case $1 in
