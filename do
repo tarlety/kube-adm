@@ -24,12 +24,17 @@ EOF
 	"init")
 		mkdir -p ${SECRET}/.kube
 		sudo kubeadm init 2>&1 | tee ${SECRET}/.kube/init
+		mkdir -p $HOME/.kube
+		sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+		sudo chown $(id -u):$(id -g) $HOME/.kube/config
+		kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
 		;;
 	"master-join")
 		shift
 		HOST=$1
 		TOKEN=$2
-		sudo kubeadm join --token=${TOKEN} ${HOST}:6443
+		SHA=$3
+		sudo kubeadm join --token=${TOKEN} ${HOST}:6443 --discovery-token-ca-cert-hash ${SHA}
 		;;
 	"master-network-up")
 		shift
