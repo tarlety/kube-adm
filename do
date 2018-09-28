@@ -49,7 +49,7 @@ EOF
 		SECRET=${SECRET} $0 master-network-down $USER $HOSTS
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -I INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	"master-network-down")
@@ -59,7 +59,7 @@ EOF
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -D INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	*)

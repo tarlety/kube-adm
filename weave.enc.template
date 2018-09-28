@@ -1,0 +1,6 @@
+env:
+- name: WEAVE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: weave-passwd
+      key: weave-passwd
