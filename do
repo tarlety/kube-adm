@@ -37,6 +37,15 @@ EOF
 		JOINCMD=`cat ${SECRET}/.kube/init | grep "kubeadm join" | sed 's/^ *//'`
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo ${JOINCMD}"
 		;;
+	"leave")
+		shift
+		MASTER=$1
+		USER=$2
+		HOST=$3
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl drain $HOST --delete-local-data --force --ignore-daemonsets"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl delete node $HOST"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo kubeadm reset"
+		;;
 	"status")
 		shift
 		HOST=$1
@@ -57,7 +66,7 @@ EOF
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p udp -s \$HOST --dport 6783,6784 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	"master-network-down")
@@ -68,13 +77,14 @@ EOF
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p udp -s \$HOST --dport 6783,6784 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	*)
 		echo $(basename $0) preflight
 		echo $(basename $0) init host operator
 		echo $(basename $0) join host operator
+		echo $(basename $0) leave master operator host
 		echo $(basename $0) status host operator
 		echo $(basename $0) master-network-up operator host1 host2 ...
 		echo $(basename $0) master-network-down operator host1 host2 ...
