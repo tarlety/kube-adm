@@ -1,23 +1,24 @@
 #!/bin/bash
 
-SECRET_SSHPORT=`cat /etc/ssh/sshd_config| grep '^Port' | cut -d ' ' -f 2 || echo 22`
-if [ "$SSHPORT" == "" ] ; then SSHPORT=${SECRET_SSHPORT} ; fi
+[[ "$SSHPORT" == "" ]] && SSHPORT=22
 [[ "${SECRET}" == "" ]] && SECRET=~/.secret
 echo SECRET=${SECRET} SSHPORT=$SSHPORT
 
 case $1 in
 	"preflight")
 		# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
-		sudo apt update -y
-		sudo apt install -y apt-transport-https curl
-		curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
-deb http://apt.kubernetes.io/ kubernetes-xenial main
-EOF
-		sudo apt update -y
-		sudo apt install -y kubelet kubeadm kubectl
-		sudo apt-mark hold kubelet kubeadm kubectl
-		sudo swapoff -a
+		# required to execute this on node
+		shift
+		HOST=$1
+		USER=$2
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt update -y"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt install -y apt-transport-https curl"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} 'echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list'
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt update -y"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt install -y kubelet kubeadm kubectl"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt-mark hold kubelet kubeadm kubectl"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo swapoff -a"
 		;;
 	"init")
 		shift
