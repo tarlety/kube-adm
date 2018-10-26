@@ -22,14 +22,14 @@ case $1 in
 		;;
 	"init")
 		shift
-		HOST=$1
+		MASTER=$1
 		USER=$2
+		NETWORK=$3
 		mkdir -p ${SECRET}/.kube
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo kubeadm init 2>&1" | tee ${SECRET}/.kube/init
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "mkdir -p \$HOME/.kube"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo cp -i /etc/kubernetes/admin.conf \$HOME/.kube/config"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo chown \$(id -u):\$(id -g) \$HOME/.kube/config"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "kubectl apply -f https://cloud.weave.works/k8s/net?k8s-version=\$(kubectl version | base64 | tr -d '\n')"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo kubeadm init --pod-network-cidr ${NETWORK} 2>&1" | tee ${SECRET}/.kube/init
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "mkdir -p \$HOME/.kube"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo cp -f /etc/kubernetes/admin.conf \$HOME/.kube/config"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo chown \$(id -u):\$(id -g) \$HOME/.kube/config"
 		;;
 	"join")
 		shift
@@ -38,6 +38,14 @@ case $1 in
 		JOINCMD=`cat ${SECRET}/.kube/init | grep "kubeadm join" | sed 's/^ *//'`
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo ${JOINCMD}"
 		;;
+	"cni")
+		shift
+		MASTER=$1
+		USER=$2
+		# https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/flannel
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/canal/rbac.yaml"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/canal/canal.yaml"
+		;;
 	"leave")
 		shift
 		MASTER=$1
@@ -45,18 +53,17 @@ case $1 in
 		HOST=$3
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl drain $HOST --delete-local-data --force --ignore-daemonsets"
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl delete node $HOST"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo kubeadm reset"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo kubeadm reset -f"
 		;;
 	"status")
 		shift
-		HOST=$1
+		MASTER=$1
 		USER=$2
 		echo "## nodes"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "kubectl get nodes"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl get nodes"
 		echo "## pods"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "kubectl get pods --all-namespaces"
-		echo "## weave"
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "kubectl exec -n kube-system \$(kubectl get pods --all-namespaces | grep weave | sed 's/  */ /g' | cut -d ' ' -f 2 | tail -n 1) -c weave -- /home/weave/weave --local status"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl get pods --all-namespaces"
+		echo "## cni"
 		;;
 	"master-network-up")
 		shift
@@ -83,10 +90,11 @@ case $1 in
 		;;
 	*)
 		echo $(basename $0) preflight
-		echo $(basename $0) init host operator
+		echo $(basename $0) init master operator network
 		echo $(basename $0) join host operator
+		echo $(basename $0) cni master operator
 		echo $(basename $0) leave master operator host
-		echo $(basename $0) status host operator
+		echo $(basename $0) status master operator
 		echo $(basename $0) master-network-up operator host1 host2 ...
 		echo $(basename $0) master-network-down operator host1 host2 ...
 		;;
