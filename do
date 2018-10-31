@@ -65,19 +65,26 @@ case $1 in
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl get pods --all-namespaces"
 		echo "## cni"
 		;;
-	"master-network-up")
+	"network-up")
 		shift
 		USER=$1
 		shift
 		HOSTS=$*
-		SECRET=${SECRET} $0 master-network-down $USER $HOSTS
+		SECRET=${SECRET} $0 network-down $USER $HOSTS
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p udp -s \$HOST --dport 6783,6784 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			for NODE in $HOSTS
+			do
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p udp -s $NODE --dport 6783,6784 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT -m comment --comment 'kubernetes-calico'"
+			done
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
-	"master-network-down")
+	"network-down")
 		shift
 		USER=$1
 		shift
@@ -85,7 +92,14 @@ case $1 in
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p udp -s \$HOST --dport 6783,6784 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			for NODE in $HOSTS
+			do
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p udp -s $NODE --dport 6783,6784 -j ACCEPT"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT"
+			done
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	*)
@@ -95,7 +109,7 @@ case $1 in
 		echo $(basename $0) cni master operator
 		echo $(basename $0) leave master operator host
 		echo $(basename $0) status master operator
-		echo $(basename $0) master-network-up operator host1 host2 ...
-		echo $(basename $0) master-network-down operator host1 host2 ...
+		echo $(basename $0) network-up operator host1 host2 ...
+		echo $(basename $0) network-down operator host1 host2 ...
 		;;
 esac
