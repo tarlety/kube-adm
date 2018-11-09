@@ -73,12 +73,12 @@ case $1 in
 		SECRET=${SECRET} $0 network-down $USER $HOSTS
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT -m comment --comment 'kubernetes'"
 			for NODE in $HOSTS
 			do
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p udp -s $NODE --dport 6783,6784 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p udp -s $NODE --dport 6783,6784,8472 -j ACCEPT -m comment --comment 'kubernetes'"
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT -m comment --comment 'kubernetes-calico'"
 			done
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
@@ -91,13 +91,13 @@ case $1 in
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -p tcp -s 10.32.0.0/12 -j ACCEPT -m comment --comment 'kubernetes'"
 			for NODE in $HOSTS
 			do
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT"
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT"
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p udp -s $NODE --dport 6783,6784 -j ACCEPT"
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p udp -s $NODE --dport 6783,6784,8472 -j ACCEPT -m comment --comment 'kubernetes'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT -m comment --comment 'kubernetes-calico'"
 			done
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
