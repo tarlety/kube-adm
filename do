@@ -54,6 +54,8 @@ case $1 in
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl drain $HOST --delete-local-data --force --ignore-daemonsets"
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl delete node $HOST"
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo kubeadm reset -f"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt-mark unhold kubelet kubeadm kubectl"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt remove -y kubelet kubeadm kubectl"
 		;;
 	"status")
 		shift
