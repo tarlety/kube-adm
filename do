@@ -29,6 +29,7 @@ case $1 in
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo kubeadm init --pod-network-cidr ${NETWORK} 2>&1" | tee ${SECRET}/.kube/init
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "mkdir -p \$HOME/.kube"
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo cp -f /etc/kubernetes/admin.conf \$HOME/.kube/config"
+		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo cat /etc/kubernetes/admin.conf" | tee ${SECRET}/.kube/config
 		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "sudo chown \$(id -u):\$(id -g) \$HOME/.kube/config"
 		;;
 	"join")
@@ -37,6 +38,7 @@ case $1 in
 		USER=$2
 		JOINCMD=`cat ${SECRET}/.kube/init | grep "kubeadm join" | sed 's/^ *//'`
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo ${JOINCMD}"
+		scp -r -P ${SSHPORT} ${SECRET}/.kube/config ${USER}@${HOST}:/home/${USER}/.secret/.kube
 		;;
 	"cni")
 		shift
@@ -100,6 +102,19 @@ case $1 in
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'"
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p udp -s $NODE --dport 6783,6784,8472 -j ACCEPT -m comment --comment 'kubernetes'"
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT -m comment --comment 'kubernetes-calico'"
+			done
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S | grep KUBE- | grep '^-N' | sed 's/^-N/sudo iptables -X/g' | bash -s"
+
+			# clean up iptables rules, which was created by kubernetes calico
+
+			for pattern in "cali[:-]" "KUBE-" "10\.244\.0\.0"
+			do
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S | grep $pattern | grep '^-A' | sed 's/^-A/sudo iptables -D/g' | bash -s"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S -t nat | grep $pattern | grep '^-A' | sed 's/^-A/sudo iptables -t nat -D/g' | bash -s"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S | grep $pattern | grep '^-N' | sed 's/^-N/sudo iptables -F/g' | bash -s"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S -t nat| grep $pattern | grep '^-N' | sed 's/^-N/sudo iptables -t nat -F/g' | bash -s"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S | grep $pattern | grep '^-N' | sed 's/^-N/sudo iptables -X/g' | bash -s"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -S -t nat| grep $pattern | grep '^-N' | sed 's/^-N/sudo iptables -t nat -X/g' | bash -s"
 			done
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
