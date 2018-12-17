@@ -59,16 +59,6 @@ case $1 in
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt-mark unhold kubelet kubeadm kubectl"
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo apt remove -y kubelet kubeadm kubectl"
 		;;
-	"status")
-		shift
-		MASTER=$1
-		USER=$2
-		echo "## nodes"
-		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl get nodes"
-		echo "## pods"
-		ssh -t ${USER}@${MASTER} -p ${SSHPORT} "kubectl get pods --all-namespaces"
-		echo "## cni"
-		;;
 	"network-up")
 		shift
 		USER=$1
@@ -125,7 +115,6 @@ case $1 in
 		echo $(basename $0) join host operator
 		echo $(basename $0) cni master operator
 		echo $(basename $0) leave master operator host
-		echo $(basename $0) status master operator
 		echo $(basename $0) network-up operator host1 host2 ...
 		echo $(basename $0) network-down operator host1 host2 ...
 		;;
