@@ -4,7 +4,7 @@
 [[ "${SECRET}" == "" ]] && SECRET=~/.secret
 
 echo \# kube-adm: SECRET=${SECRET} SSHPORT=$SSHPORT
-echo ---
+echo ===
 
 case $1 in
 	"preflight")
@@ -139,4 +139,4 @@ case $1 in
 esac
 
 echo \# kube-adm: done
-echo ---
+echo ===
