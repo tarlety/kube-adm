@@ -83,7 +83,7 @@ case $1 in
 			for NODE in $HOSTS
 			do
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "
-					sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'
+					sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783,9100 -j ACCEPT -m comment --comment 'kubernetes'
 					sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'
 					sudo iptables -I INPUT -m multiport -p udp -s $NODE --dport 6783,6784,8472 -j ACCEPT -m comment --comment 'kubernetes'
 					sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT -m comment --comment 'kubernetes-calico'
@@ -103,7 +103,7 @@ case $1 in
 			for NODE in $HOSTS
 			do
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "
-					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'
+					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 6443,2379:2380,10250:10252,6783,9100 -j ACCEPT -m comment --comment 'kubernetes'
 					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 6443,2379:2380,10250:10252,6783 -j ACCEPT -m comment --comment 'kubernetes'
 					sudo iptables -D INPUT -m multiport -p udp -s $NODE --dport 6783,6784,8472 -j ACCEPT -m comment --comment 'kubernetes'
 					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 179 -j ACCEPT -m comment --comment 'kubernetes-calico'
