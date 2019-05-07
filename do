@@ -1,5 +1,7 @@
 #!/bin/bash
 
+KUBERNETES_VERSION=1.13.0-00
+
 [[ "${SSHPORT}" == "" ]] && SSHPORT=22
 [[ "${SECRET}" == "" ]] && SECRET=~/.secret
 
@@ -19,7 +21,7 @@ case $1 in
 			curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 			echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 			sudo apt update -y
-			sudo apt install -y kubelet kubeadm kubectl
+			sudo apt install -y kubelet=${KUBERNETES_VERSION} kubeadm=${KUBERNETES_VERSION} kubectl=${KUBERNETES_VERSION}
 			sudo apt-mark hold kubelet kubeadm kubectl
 			sudo swapoff -a
 			'
