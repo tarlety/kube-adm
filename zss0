@@ -309,6 +309,7 @@ case $1 in
 		do
 			case ${ONOFF} in
 			"up")
+				# if NODE is MASTER
 				if [[ ${MASTERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
 					for MASTER in ${MASTERS}
 					do
@@ -325,6 +326,7 @@ case $1 in
 							"
 					done
 				fi
+				# if NODE is WORKER
 				if [[ ${WORKERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
 					for MASTER in ${MASTERS}
 					do
