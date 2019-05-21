@@ -120,6 +120,7 @@ case $1 in
 		# AppImplementing Section: requirement
 		#------------------------------------------------------------------------------
 		echo - node-adm: $(${NODEADM}/zss0 version)
+		echo - kubectl: $(which kubectl)
 		#------------------------------------------------------------------------------
 		echo - gpg: $(which gpg)
 		echo - tar: $(which tar)
@@ -384,11 +385,6 @@ case $1 in
 		cd - &> /dev/null
 		;;
 	"leave")
-		shift
-		MASTER=$1
-		USER=$2
-		HOST=$3
-
 		shift
 		NODES=${*:-$($0 nodes)}
 		cd ${NODEADM}
