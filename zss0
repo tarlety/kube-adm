@@ -73,8 +73,8 @@ DEFAULT_GPGKEY=${USERNAME}
 CONFIGKEYS="kubernetes_version network nodeadm masters workers"
 declare -A CONFIG_DESCRIPTIONS
 CONFIG_DESCRIPTIONS=( \
-	["kubernetes_version"]="the apt package version of kubeadm, always empty or with leading '='." \
-	["network"]="to provide the control to all nodes."
+	["kubernetes_version"]="the apt package version of kubeadm; empty or with leading '='." \
+	["network"]="to provide the control to all nodes." \
 	["nodeadm"]="the ctrl command to control all nodes." \
 	["masters"]="the master nodes of kubernetes cluster." \
 	["workers"]="the worker nodes of kubernetes cluster." \
