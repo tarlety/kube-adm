@@ -80,7 +80,7 @@ CONFIG_DESCRIPTIONS=( \
 	["workers"]="the worker nodes of kubernetes cluster." \
 	)
 
-DEFAULT_KUBERNETES_VERSION='=1.13.0-00'
+DEFAULT_KUBERNETES_VERSION='=1.14.2-00'
 DEFAULT_NETWORK=10.244.0.0/16
 DEFAULT_NODEADM=../node_adm
 DEFAULT_MASTERS="u1"
@@ -178,19 +178,25 @@ case $1 in
 			if [ ! -e ${SECRET}/init.enc ]
 			then
 				# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/
-				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} 2>&1" | gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
+				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} 2>&1" \
+					| gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
+
 				./zss0 exec ${NODE} "
 					mkdir -p \${HOME}/.kube ;
 					sudo cp -f /etc/kubernetes/admin.conf \${HOME}/.kube/config ;
 					"
-				./zss0 exec ${NODE} "sudo cat /etc/kubernetes/admin.conf" | gpg -ear ${GPGKEY} -o ${SECRET}/config.enc
+
+				./zss0 exec ${NODE} "sudo cat /etc/kubernetes/admin.conf" \
+					| gpg -ear ${GPGKEY} -o ${SECRET}/config.enc
+
 				./zss0 exec ${NODE} "sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config"
 
 				# https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/flannel
 				./zss0 exec ${NODE} "
-					kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/canal/rbac.yaml ;
-					kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/canal/canal.yaml ;
+					kubectl apply -f https://docs.projectcalico.org/v3.7/manifests/canal.yaml ;
 					"
+
+				# optional: https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/app-layer-policy
 			fi
 		done
 		cd - &> /dev/null
@@ -320,7 +326,7 @@ case $1 in
 					done
 					for WORKER in ${WORKERS}
 					do
-						WORKER=$(grep "[\t ]*${WORKER}$" /etc/hosts | head -1 | cut -d' ' -f1)
+						WORKERIP=$(grep "[\t ]*${WORKER}$" /etc/hosts | head -1 | cut -d' ' -f1)
 						./zss0 exec ${NODE} "
 							sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
 							"
@@ -357,14 +363,15 @@ case $1 in
 		;;
 	"preflight")
 		shift
+		NODES=${*:-$($0 nodes)}
 		cd ${NODEADM}
-		for ${NODE} in $($0 ndoes)
+		for NODE in ${NODES}
 		do
 			# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
 			# required to execute on all nodes
 			./zss0 exec ${NODE} "
 				sudo apt update -y ;
-				sudo apt install -y apt-transport-https curl ;
+				sudo apt install -y apt-transport-https curl gpg;
 				curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add - ;
 				echo 'deb http://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list ;
 				sudo apt update -y ;
@@ -378,7 +385,7 @@ case $1 in
 	"join")
 		shift
 		NODES=${*:-$($0 nodes)}
-		JOINCMD=`gpg -d ${SECRET}/init.enc | grep "kubeadm join" | sed 's/^ *//'`
+		JOINCMD=$(gpg -d ${SECRET}/init.enc | grep "kubeadm join" | sed 's/^ *//')
 		cd ${NODEADM}
 		for NODE in ${NODES}
 		do
@@ -394,7 +401,15 @@ case $1 in
 		do
 			kubectl drain ${NODE} --delete-local-data --force --ignore-daemonsets
 			kubectl delete node ${NODE}
-
+		done
+		cd - &> /dev/null
+		;;
+	"clean")
+		shift
+		NODES=${*:-$($0 nodes)}
+		cd ${NODEADM}
+		for NODE in ${NODES}
+		do
 			./zss0 exec ${NODE} "
 				sudo kubeadm reset -f ;
 				sudo apt-mark unhold kubelet kubeadm kubectl ;
@@ -414,7 +429,7 @@ case $1 in
 		#------------------------------------------------------------------------------
 		echo $(basename $0) nodes
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[preflight/join/leave] [nodes]"
+		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
 		#------------------------------------------------------------------------------
 		;;
 esac
