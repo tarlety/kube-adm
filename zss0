@@ -170,6 +170,7 @@ case $1 in
 
 		# AppImplementing Section: secret-create
 		#------------------------------------------------------------------------------
+		INIT_OPTIONS=$*
 		rm -f ${SECRET}/*
 
 		cd ${NODEADM}
@@ -178,7 +179,7 @@ case $1 in
 			if [ ! -e ${SECRET}/init.enc ]
 			then
 				# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/
-				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} 2>&1" \
+				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} ${INIT_OPTIONS} 2>&1" \
 					| gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
 
 				./zss0 exec ${NODE} "
@@ -384,18 +385,20 @@ case $1 in
 		;;
 	"join")
 		shift
-		NODES=${*:-$($0 nodes)}
-		JOINCMD=$(gpg -d ${SECRET}/init.enc | grep "kubeadm join" | sed 's/^ *//')
+		MASTER=$(echo ${MASTERS} | cut -d' ' -f1)
+		NODES=${*:-${WORKERS}}
+		TOKEN=$(gpg -d ${SECRET}/init.enc | grep 'kubeadm join' | rev| cut -d' ' -f2 | rev)
+		HASH=$(gpg -d ${SECRET}/init.enc  | grep 'discovery-token-ca-cert-hash' | rev | cut -d: -f1 | rev)
 		cd ${NODEADM}
 		for NODE in ${NODES}
 		do
-			./zss0 exec ${NODE} "sudo ${JOINCMD}"
+			./zss0 exec ${NODE} "sudo kubeadm join ${MASTER}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}"
 		done
 		cd - &> /dev/null
 		;;
 	"leave")
 		shift
-		NODES=${*:-$($0 nodes)}
+		NODES=${*:-${WORKERS}}
 		cd ${NODEADM}
 		for NODE in ${NODES}
 		do
@@ -423,7 +426,7 @@ case $1 in
 		echo $(basename $0) version
 		echo $(basename $0) env
 		echo $(basename $0) config ...
-		echo $(basename $0) secret-create
+		echo $(basename $0) "secret-create [init_options, ex: --ignore-preflight-errors=all --apiserver-advertise-address <ip>"
 		echo $(basename $0) "state [list/save/load] [config/secret/data] [state_name, ex: date-stage-env]"
 		# AppImplementing Section: usage
 		#------------------------------------------------------------------------------
