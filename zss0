@@ -182,20 +182,18 @@ case $1 in
 				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} ${INIT_OPTIONS} 2>&1" \
 					| gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
 
-				./zss0 exec ${NODE} "
+				./zss0 exec ${NODE} '
 					mkdir -p \${HOME}/.kube ;
 					sudo cp -f /etc/kubernetes/admin.conf \${HOME}/.kube/config ;
-					"
+					'
 
-				./zss0 exec ${NODE} "sudo cat /etc/kubernetes/admin.conf" \
+				./zss0 exec ${NODE} 'sudo cat /etc/kubernetes/admin.conf' \
 					| gpg -ear ${GPGKEY} -o ${SECRET}/config.enc
 
-				./zss0 exec ${NODE} "sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config"
+				./zss0 exec ${NODE} 'sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config'
 
 				# https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/flannel
-				./zss0 exec ${NODE} "
-					kubectl apply -f https://docs.projectcalico.org/v3.7/manifests/canal.yaml ;
-					"
+				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.7/manifests/canal.yaml'
 
 				# optional: https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/app-layer-policy
 			fi
