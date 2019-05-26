@@ -421,7 +421,7 @@ case $1 in
 		done
 		cd - &> /dev/null
 		;;
-	"config")
+	"kubecopy")
 		vimdiff ~/.kube/config <(gpg -d ${SECRET}/config.enc)
 		;;
 	#------------------------------------------------------------------------------
@@ -436,7 +436,7 @@ case $1 in
 		echo $(basename $0) nodes
 		echo $(basename $0) "network [up/down/status] [nodes]"
 		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
-		echo $(basename $0) config
+		echo $(basename $0) kubecopy
 		#------------------------------------------------------------------------------
 		;;
 esac
