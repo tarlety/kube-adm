@@ -6,7 +6,7 @@
 #==============================================================================
 # Copyright (c) 2019, tarlety@gmail.com
 #
-# Zerus Scripting Standard v0.5.6
+# Zerus Scripting Standard v0.5.7
 #
 # This standard defines script state management framework.
 # Following this framework, you can manage app states in a consistent way.
@@ -71,7 +71,7 @@
 #==============================================================================
 # Environments:
 
-ZSSVERSION=0.5.6
+ZSSVERSION=0.5.7
 # AppImplementing Section: app
 #------------------------------------------------------------------------------
 source ./zss0.impl app
@@ -97,7 +97,7 @@ source ./zss0.impl config
 for KEY in ${CONFIGKEYS}
 do
 	VARNAME=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
-	eval declare -A ${VARNAME}=$(cat ${CONFIG}/${KEY} 2>/dev/null)
+	eval declare -A ${VARNAME}='$(cat ${CONFIG}/${KEY} 2>/dev/null)'
 done
 
 GPGKEY=`cat ${CONFIG}/gpgkey 2>/dev/null`
