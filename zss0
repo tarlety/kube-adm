@@ -377,8 +377,9 @@ case $1 in
 				sudo apt install -y kubelet${KUBERNETES_VERSION} kubeadm${KUBERNETES_VERSION} kubectl${KUBERNETES_VERSION} ;
 				sudo apt-mark hold kubelet kubeadm kubectl ;
 				sudo swapoff -a ;
-				"
+				" &
 		done
+		wait
 		cd - &> /dev/null
 		;;
 	"join")
