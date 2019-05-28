@@ -1,16 +1,19 @@
 #!/bin/bash
 
+# 0.6.0 backlogs
+#   - derived: kube-apps-ctrl, docker-apps, node-adm, ceph-adm, kube-adm, zerus-test
+
 #==============================================================================
 # Copyright (c) 2019, tarlety@gmail.com
 #
-# Zerus Scripting Standard v0.5.1
+# Zerus Scripting Standard v0.5.6
 #
 # This standard defines script state management framework.
 # Following this framework, you can manage app states in a consistent way.
 #
 # Environments:
 #
-#    ZSS_STORE	The store location to keep config/secret/stte/data.
+#    ZSS_STORE	The store location to keep config/secret/state/data.
 #
 # Commands:
 #
@@ -35,6 +38,19 @@
 #     - *-data.tgz.enc
 #   - store/projectname/appname/others...
 #
+# ZSS framework and AppImplementing interface (zss0.impl)
+#
+#    - app
+#    - config
+#    - vars
+#    - requirment
+#    - secret-create
+#    - state-data-save
+#    - state-secret-load-post
+#    - state-data-load
+#    - command
+#    - usage
+#
 # Scnario:
 #
 #    1. First, use "<app> env" to check current configurations.
@@ -44,6 +60,9 @@
 #
 # Changelog:
 #
+#    v0.5.3:
+#       - introducing zss0.impl
+#
 #    v0.5.0:
 #       - new designed Store Structure
 #       - framework integrated: app-related sections are bounded by AppImplementing
@@ -52,10 +71,12 @@
 #==============================================================================
 # Environments:
 
-VERSION=0.5.1
-PROJECTNAME=zerus
-APPNAME=kube-adm
-STORE=${ZSS_STORE:-"${PWD}/.store"}/${PROJECTNAME}/${APPNAME}
+ZSSVERSION=0.5.6
+# AppImplementing Section: app
+#------------------------------------------------------------------------------
+source ./zss0.impl app
+#------------------------------------------------------------------------------
+STORE=${ZSS_STORE:-"${HOME}/store"}/${PROJECTNAME}/${APPNAME}
 SECRET=${SECRET:-"${STORE}/secret"}
 CONFIG=${CONFIG:-"${STORE}/config"}
 DATA=${DATA:-"${STORE}/data"}
@@ -70,57 +91,52 @@ DEFAULT_GPGKEY=${USERNAME}
 
 # AppImplementing Section: configs
 #------------------------------------------------------------------------------
-CONFIGKEYS="kubernetes_version network nodeadm masters workers"
-declare -A CONFIG_DESCRIPTIONS
-CONFIG_DESCRIPTIONS=( \
-	["kubernetes_version"]="the apt package version of kubeadm; empty or with leading '='." \
-	["network"]="to provide the control to all nodes." \
-	["nodeadm"]="the ctrl command to control all nodes." \
-	["masters"]="the master nodes of kubernetes cluster." \
-	["workers"]="the worker nodes of kubernetes cluster." \
-	)
-
-DEFAULT_KUBERNETES_VERSION='=1.14.2-00'
-DEFAULT_NETWORK=10.244.0.0/16
-DEFAULT_NODEADM=../node_adm
-DEFAULT_MASTERS="u1"
-DEFAULT_WORKERS="u2 u3 u4 u5"
-
-KUBERNETES_VERSION=`cat ${CONFIG}/kubernetes_version 2>/dev/null`
-NETWORK=`cat ${CONFIG}/network 2>/dev/null`
-NODEADM=`cat ${CONFIG}/nodeadm 2>/dev/null`
-MASTERS=`cat ${CONFIG}/masters 2>/dev/null`
-WORKERS=`cat ${CONFIG}/workers 2>/dev/null`
+source ./zss0.impl config
 #------------------------------------------------------------------------------
+
+for KEY in ${CONFIGKEYS}
+do
+	VARNAME=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
+	eval declare -A ${VARNAME}=$(cat ${CONFIG}/${KEY} 2>/dev/null)
+done
 
 GPGKEY=`cat ${CONFIG}/gpgkey 2>/dev/null`
 
 eval export $(echo ${CONFIGKEYS} | tr '[:lower:]' '[:upper:]')
+
+# AppImplementing Section: vars
+#------------------------------------------------------------------------------
+source ./zss0.impl vars
+#------------------------------------------------------------------------------
 
 #==============================================================================
 # Commands
 
 case $1 in
 	"version")
-		echo ${VERSION}
+		echo ${ZSSVERSION} ${APPVERSION}
 		;;
 	"env")
 		echo =========================================================================
 		echo "## NAME: ${PROJECTNAME}/${APPNAME}"
-		echo - VERSION: ${VERSION}
+		echo - ZSSVERSION: ${ZSSVERSION}
+		echo - APPVERSION: ${APPVERSION}
 		echo - STORE: ${STORE}
 		echo - SECRET: $(echo $(cat $SALT 2>/dev/null) $(cat ${SECRET}/* | sha256sum 2>/dev/null) | sha1sum | cut -c1-8)
 		for KEY in ${CONFIGKEYS}
 		do
 			KEY=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
-			eval echo - ${KEY}: \${${KEY}}
+			if [ "$(eval echo \${!${KEY}[@]})" == "0" ]; then
+				eval echo - ${KEY}: \${${KEY}}
+			else
+				eval echo - ${KEY}: "{\${!${KEY}[@]}} -\> {\${${KEY}[@]}}"
+			fi
 		done
 		echo - GPGKEY: ${GPGKEY} $(gpg -k ${GPGKEY} 2>/dev/null | sed -n '2p' | xargs)
 		echo "## REQUIREMENT:"
 		# AppImplementing Section: requirement
 		#------------------------------------------------------------------------------
-		echo - node-adm: $(${NODEADM}/zss0 version)
-		echo - kubectl: $(which kubectl)
+		source ./zss0.impl requirement
 		#------------------------------------------------------------------------------
 		echo - gpg: $(which gpg)
 		echo - tar: $(which tar)
@@ -131,21 +147,12 @@ case $1 in
 		shift
 		mkdir -p ${CONFIG}
 		case $1 in
-			# AppImplementing Section: config cases
-			#------------------------------------------------------------------------------
-			"kubernetes_version"|"network"|"nodeadm"|"masters"|"workers")
-			#------------------------------------------------------------------------------
-				KEY=$1
-				VALUE_VAR=$(echo DEFAULT_${KEY} | tr '[:lower:]' '[:upper:]')
-				VALUE=${2:-$(eval echo \${${VALUE_VAR}})}
-				eval echo \'${VALUE}\' > ${CONFIG}/${KEY}
-				;;
 			"gpgkey")
 				shift
 				GPGKEY=${1:-${DEFAULT_GPGKEY}}
 				echo ${GPGKEY} >  ${CONFIG}/gpgkey
 				;;
-			*)
+			""|"help")
 				echo "Usage: $(basename $0) config <key> <value>"
 				echo ""
 				echo "Config keys:"
@@ -161,6 +168,12 @@ case $1 in
 				echo " gpgkey: configure which gpg key to use."
 				echo "	Ex: $(basename $0) config gpgkey ${DEFAULT_GPGKEY}"
 				;;
+			*)
+				KEY=$1
+				VALUE_VAR=$(echo DEFAULT_${KEY} | tr '[:lower:]' '[:upper:]')
+				VALUE=${2:-$(eval echo \${${VALUE_VAR}})}
+				eval echo \'${VALUE}\' > ${CONFIG}/${KEY}
+				;;
 		esac
 		;;
 	"secret-create")
@@ -170,35 +183,7 @@ case $1 in
 
 		# AppImplementing Section: secret-create
 		#------------------------------------------------------------------------------
-		INIT_OPTIONS=$*
-		rm -f ${SECRET}/*
-
-		cd ${NODEADM}
-		for NODE in ${MASTERS}
-		do
-			if [ ! -e ${SECRET}/init.enc ]
-			then
-				# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/
-				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} ${INIT_OPTIONS} 2>&1" \
-					| gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
-
-				./zss0 exec ${NODE} '
-					mkdir -p \${HOME}/.kube ;
-					sudo cp -f /etc/kubernetes/admin.conf \${HOME}/.kube/config ;
-					'
-
-				./zss0 exec ${NODE} 'sudo cat /etc/kubernetes/admin.conf' \
-					| gpg -ear ${GPGKEY} -o ${SECRET}/config.enc
-
-				./zss0 exec ${NODE} 'sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config'
-
-				# https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/flannel
-				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.7/manifests/canal.yaml'
-
-				# optional: https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/app-layer-policy
-			fi
-		done
-		cd - &> /dev/null
+		source ./zss0.impl secret-create
 		#------------------------------------------------------------------------------
 
 		gpg --gen-random --armor 2 16 | base64 | cut -c1-16 > ${SALT}
@@ -228,16 +213,16 @@ case $1 in
 					cd - &> /dev/null
 				fi
 				if [ "${TYPE}" == "data" -o "${TYPE}" == "" ]; then
+					echo ${STATENAME} > ${CONFIG}/base_data
 					# AppImplementing Section: data save
 					#------------------------------------------------------------------------------
-					echo "DATA state not support."
+					source ./zss0.impl state-data-save
 					#------------------------------------------------------------------------------
 				fi
 				;;
 			"load")
 				if [ "${TYPE}" == "config" -o "${TYPE}" == "" ]; then
-					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-config.tgz ]
-					then
+					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-config.tgz ]; then
 						cd ${CONFIG}
 						tar -zxf ${STORE}/state/${STATENAME}-${APPNAME}-config.tgz
 						cd - &> /dev/null
@@ -245,22 +230,23 @@ case $1 in
 					echo ${STATENAME} > ${CONFIG}/base_config
 				fi
 				if [ "${TYPE}" == "secret" -o "${TYPE}" == "" ]; then
-					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc ]
-					then
+					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc ]; then
 						cd ${SECRET}
-						# AppImplementing Section: secret load
-						#------------------------------------------------------------------------------
 						gpg -d ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc | tar xz
-						#------------------------------------------------------------------------------
 						cd - &> /dev/null
+						# AppImplementing Section: secret load post
+						#------------------------------------------------------------------------------
+						source $(dirname $0)/zss0.impl state-secret-load-post
+						#------------------------------------------------------------------------------
 					fi
 					echo ${STATENAME} > ${CONFIG}/base_secret
 				fi
 				if [ "${TYPE}" == "data" -o "${TYPE}" == "" ]; then
 					# AppImplementing Section: data load
 					#------------------------------------------------------------------------------
-					echo "DATA state not support."
+					source ./zss0.impl state-data-load
 					#------------------------------------------------------------------------------
+					echo ${STATENAME} > ${CONFIG}/base_data
 				fi
 				;;
 			"list"|*)
@@ -290,153 +276,25 @@ case $1 in
 				;;
 		esac
 		;;
-	# AppImplementing Section: commands
-	#------------------------------------------------------------------------------
-	"nodes")
-		shift
-		echo ${MASTERS} ${WORKERS}
-		;;
-	"network")
-		# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
-		# master port requirement:
-		#  - 6443: master and worker
-		#  - 2379-2380: master
-		#  - 10250: master
-		# worker port requirement:
-		#  - 10250: master
-		shift
-		ONOFF=$1
-		shift
-		NODES=${*:-$($0 nodes)}
-
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			case ${ONOFF} in
-			"up")
-				# if NODE is MASTER
-				if [[ ${MASTERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
-					for MASTER in ${MASTERS}
-					do
-						MASTERIP=$(grep "[\t ]*${MASTER}$" /etc/hosts | head -1 | cut -d' ' -f1)
-						./zss0 exec ${NODE} "
-							sudo ufw allow from ${MASTERIP} to any proto tcp port 6443,2379:2380,10250 comment 'kube-adm' ;
-							"
-					done
-					for WORKER in ${WORKERS}
-					do
-						WORKERIP=$(grep "[\t ]*${WORKER}$" /etc/hosts | head -1 | cut -d' ' -f1)
-						./zss0 exec ${NODE} "
-							sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
-							"
-					done
-				fi
-				# if NODE is WORKER
-				if [[ ${WORKERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
-					for MASTER in ${MASTERS}
-					do
-						MASTERIP=$(grep "[\t ]*${MASTER}$" /etc/hosts | head -1 | cut -d' ' -f1)
-						./zss0 exec ${NODE} "
-							sudo ufw allow from ${MASTERIP} to any proto tcp port 10250 comment 'kube-adm' ;
-							"
-					done
-				fi
-				;;
-			"down")
-				RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep kube-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
-				while [ "${RULENUM}" != "" ]
-				do
-					echo y | ./zss0 exec ${NODE} "sudo ufw delete ${RULENUM}"
-					RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep kube-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
-				done
-				;;
-			"status")
-				./zss0 exec ${NODE} "sudo ufw status numbered | grep 'kube-adm'"
-				;;
-			*)
-				$0 ; exit 1
-				;;
-			esac
-		done
-		cd - &> /dev/null
-		;;
-	"preflight")
-		shift
-		NODES=${*:-$($0 nodes)}
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
-			# required to execute on all nodes
-			./zss0 exec ${NODE} "
-				sudo apt update -y ;
-				sudo apt install -y apt-transport-https curl gpg;
-				curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add - ;
-				echo 'deb http://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list ;
-				sudo apt update -y ;
-				sudo apt install -y kubelet${KUBERNETES_VERSION} kubeadm${KUBERNETES_VERSION} kubectl${KUBERNETES_VERSION} ;
-				sudo apt-mark hold kubelet kubeadm kubectl ;
-				sudo swapoff -a ;
-				" &
-		done
-		wait
-		cd - &> /dev/null
-		;;
-	"join")
-		shift
-		MASTER=$(echo ${MASTERS} | cut -d' ' -f1)
-		NODES=${*:-${WORKERS}}
-		TOKEN=$(gpg -d ${SECRET}/init.enc | grep 'kubeadm join' | rev| cut -d' ' -f2 | rev)
-		HASH=$(gpg -d ${SECRET}/init.enc  | grep 'discovery-token-ca-cert-hash' | rev | cut -d: -f1 | rev)
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "sudo kubeadm join ${MASTER}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}"
-		done
-		cd - &> /dev/null
-		;;
-	"leave")
-		shift
-		NODES=${*:-${WORKERS}}
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			kubectl drain ${NODE} --delete-local-data --force --ignore-daemonsets
-			kubectl delete node ${NODE}
-		done
-		cd - &> /dev/null
-		;;
-	"clean")
-		shift
-		NODES=${*:-$($0 nodes)}
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "
-				sudo kubeadm reset -f ;
-				sudo apt-mark unhold kubelet kubeadm kubectl ;
-				sudo apt remove -y kubelet kubeadm kubectl ;
-				"
-		done
-		cd - &> /dev/null
-		;;
-	"kubecopy")
-		vimdiff ~/.kube/config <(gpg -d ${SECRET}/config.enc)
-		;;
-	#------------------------------------------------------------------------------
-	*)
+	"")
 		echo $(basename $0) version
 		echo $(basename $0) env
 		echo $(basename $0) config ...
-		echo $(basename $0) "secret-create [init_options, ex: --ignore-preflight-errors=all --apiserver-advertise-address <ip>"
+		echo $(basename $0) secret-create
 		echo $(basename $0) "state [list/save/load] [config/secret/data] [state_name, ex: date-stage-env]"
 		# AppImplementing Section: usage
 		#------------------------------------------------------------------------------
-		echo $(basename $0) nodes
-		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
-		echo $(basename $0) kubecopy
+		source ./zss0.impl usage
 		#------------------------------------------------------------------------------
 		;;
+	# AppImplementing Section: commands
+	#------------------------------------------------------------------------------
+	*)
+		COMMAND=$1
+		shift
+		ARGS=$*
+		source ./zss0.impl command ${COMMAND} ${ARGS}
+		;;
+	#------------------------------------------------------------------------------
 esac
 

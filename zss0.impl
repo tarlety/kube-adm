@@ -1,0 +1,217 @@
+#!/bin/bash
+
+# zss interface
+
+case $1 in
+	"app")
+		PROJECTNAME=zerus
+		APPNAME=kube-adm
+		APPVERSION=0.1.0
+		;;
+	"config")
+		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
+		declare -A CONFIG_DESCRIPTIONS
+		CONFIG_DESCRIPTIONS=( \
+			["kubernetes_version"]="the apt package version of kubeadm; empty or with leading '='." \
+			["network"]="to provide the control to all nodes." \
+			["nodeadm"]="the ctrl command to control all nodes." \
+			["masters"]="the master nodes of kubernetes cluster." \
+			["workers"]="the worker nodes of kubernetes cluster." \
+			)
+
+		DEFAULT_KUBERNETES_VERSION='=1.14.2-00'
+		DEFAULT_NETWORK=10.244.0.0/16
+		DEFAULT_NODEADM=../node_adm
+		DEFAULT_MASTERS="u1"
+		DEFAULT_WORKERS="u2 u3 u4 u5"
+		;;
+	"vars")
+		;;
+	"requirement")
+		echo - node-adm: $(${NODEADM}/zss0 version)
+		echo - kubectl: $(which kubectl)
+		;;
+	"secret-create")
+		INIT_OPTIONS=$*
+		rm -f ${SECRET}/*
+
+		cd ${NODEADM}
+		for NODE in ${MASTERS}
+		do
+			if [ ! -e ${SECRET}/init.enc ]
+			then
+				# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/
+				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} ${INIT_OPTIONS} 2>&1" \
+					| gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
+
+				./zss0 exec ${NODE} '
+					mkdir -p \${HOME}/.kube ;
+					sudo cp -f /etc/kubernetes/admin.conf \${HOME}/.kube/config ;
+					'
+
+				./zss0 exec ${NODE} 'sudo cat /etc/kubernetes/admin.conf' \
+					| gpg -ear ${GPGKEY} -o ${SECRET}/config.enc
+
+				./zss0 exec ${NODE} 'sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config'
+
+				# https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/flannel
+				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.7/manifests/canal.yaml'
+
+				# optional: https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/app-layer-policy
+			fi
+		done
+		cd - &> /dev/null
+		;;
+	"state-data-save")
+		;;
+	"state-secret-load-post")
+		;;
+	"state-data-load")
+		;;
+	# AppImplementing Section: commands
+	#------------------------------------------------------------------------------
+	"command")
+		shift
+		case $1 in
+		"nodes")
+			shift
+			echo ${MASTERS} ${WORKERS}
+			;;
+		"network")
+			# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
+			# master port requirement:
+			#  - 6443: master and worker
+			#  - 2379-2380: master
+			#  - 10250: master
+			# worker port requirement:
+			#  - 10250: master
+			shift
+			ONOFF=$1
+			shift
+			NODES=${*:-$($0 nodes)}
+
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				case ${ONOFF} in
+				"up")
+					# if NODE is MASTER
+					if [[ ${MASTERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
+						for MASTER in ${MASTERS}
+						do
+							MASTERIP=$(grep "[\t ]*${MASTER}$" /etc/hosts | head -1 | cut -d' ' -f1)
+							./zss0 exec ${NODE} "
+								sudo ufw allow from ${MASTERIP} to any proto tcp port 6443,2379:2380,10250 comment 'kube-adm' ;
+								"
+						done
+						for WORKER in ${WORKERS}
+						do
+							WORKERIP=$(grep "[\t ]*${WORKER}$" /etc/hosts | head -1 | cut -d' ' -f1)
+							./zss0 exec ${NODE} "
+								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
+								"
+						done
+					fi
+					# if NODE is WORKER
+					if [[ ${WORKERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
+						for MASTER in ${MASTERS}
+						do
+							MASTERIP=$(grep "[\t ]*${MASTER}$" /etc/hosts | head -1 | cut -d' ' -f1)
+							./zss0 exec ${NODE} "
+								sudo ufw allow from ${MASTERIP} to any proto tcp port 10250 comment 'kube-adm' ;
+								"
+						done
+					fi
+					;;
+				"down")
+					RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep kube-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
+					while [ "${RULENUM}" != "" ]
+					do
+						echo y | ./zss0 exec ${NODE} "sudo ufw delete ${RULENUM}"
+						RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep kube-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
+					done
+					;;
+				"status")
+					./zss0 exec ${NODE} "sudo ufw status numbered | grep 'kube-adm'"
+					;;
+				*)
+					$0 ; exit 1
+					;;
+				esac
+			done
+			cd - &> /dev/null
+			;;
+		"preflight")
+			shift
+			NODES=${*:-$($0 nodes)}
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
+				# required to execute on all nodes
+				./zss0 exec ${NODE} "
+					sudo apt update -y ;
+					sudo apt install -y apt-transport-https curl gpg;
+					curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add - ;
+					echo 'deb http://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list ;
+					sudo apt update -y ;
+					sudo apt install -y kubelet${KUBERNETES_VERSION} kubeadm${KUBERNETES_VERSION} kubectl${KUBERNETES_VERSION} ;
+					sudo apt-mark hold kubelet kubeadm kubectl ;
+					sudo swapoff -a ;
+					" &
+			done
+			wait
+			cd - &> /dev/null
+			;;
+		"join")
+			shift
+			MASTER=$(echo ${MASTERS} | cut -d' ' -f1)
+			NODES=${*:-${WORKERS}}
+			TOKEN=$(gpg -d ${SECRET}/init.enc | grep 'kubeadm join' | rev| cut -d' ' -f2 | rev)
+			HASH=$(gpg -d ${SECRET}/init.enc  | grep 'discovery-token-ca-cert-hash' | rev | cut -d: -f1 | rev)
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "sudo kubeadm join ${MASTER}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}"
+			done
+			cd - &> /dev/null
+			;;
+		"leave")
+			shift
+			NODES=${*:-${WORKERS}}
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				kubectl drain ${NODE} --delete-local-data --force --ignore-daemonsets
+				kubectl delete node ${NODE}
+			done
+			cd - &> /dev/null
+			;;
+		"clean")
+			shift
+			NODES=${*:-$($0 nodes)}
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "
+					sudo kubeadm reset -f ;
+					sudo apt-mark unhold kubelet kubeadm kubectl ;
+					sudo apt remove -y kubelet kubeadm kubectl ;
+					"
+			done
+			cd - &> /dev/null
+			;;
+		"kubecopy")
+			vimdiff ~/.kube/config <(gpg -d ${SECRET}/config.enc)
+			;;
+		esac
+		;;
+	#------------------------------------------------------------------------------
+	"usage")
+		echo $(basename $0) nodes
+		echo $(basename $0) "network [up/down/status] [nodes]"
+		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
+		echo $(basename $0) kubecopy
+		;;
+esac
+
