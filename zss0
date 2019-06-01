@@ -6,7 +6,7 @@
 #==============================================================================
 # Copyright (c) 2019, tarlety@gmail.com
 #
-# Zerus Scripting Standard v0.5.8
+# Zerus Scripting Standard v0.5.13
 #
 # This standard defines script state management framework.
 # Following this framework, you can manage app states in a consistent way.
@@ -60,6 +60,10 @@
 #
 # Changelog:
 #
+#    v0.5.13:
+#       - latest version checking
+#       - new command 'update' to fetch latest version
+#
 #    v0.5.3:
 #       - introducing zss0.impl
 #
@@ -69,9 +73,18 @@
 #       - certificate as secret files shall be encrypted
 
 #==============================================================================
+# Auto Update:
+
+ZSSVERSION=0.5.13
+REMOTE_RELEASE=https://raw.githubusercontent.com/tarlety/kube-apps-platform/master/zss0
+diff <(curl https://raw.githubusercontent.com/tarlety/kube-apps-platform/master/zss0 2>/dev/null) zss0 2>/dev/null 1>/dev/null || echo \
+"*************************************************************************
+Newer ZSS Version Available. Type '$0 update' to get the latest ZSS.
+*************************************************************************"
+
+#==============================================================================
 # Environments:
 
-ZSSVERSION=0.5.8
 # AppImplementing Section: app
 #------------------------------------------------------------------------------
 source ./zss0.impl app
@@ -115,6 +128,9 @@ source ./zss0.impl vars
 case $1 in
 	"version")
 		echo ${ZSSVERSION} ${APPVERSION}
+		;;
+	"update")
+		(wget ${REMOTE_RELEASE} -O $0 && chmod +x $0)&
 		;;
 	"env")
 		echo =========================================================================
@@ -179,13 +195,13 @@ case $1 in
 	"secret-create")
 		shift
 		mkdir -p ${SECRET}
-		chmod -R go-rwx ${SECRET}
 
 		# AppImplementing Section: secret-create
 		#------------------------------------------------------------------------------
 		source ./zss0.impl secret-create $*
 		#------------------------------------------------------------------------------
 
+		chmod -R go-rwx ${SECRET}
 		gpg --gen-random --armor 2 16 | base64 | cut -c1-16 > ${SALT}
 		;;
 	"state")
@@ -278,6 +294,7 @@ case $1 in
 		;;
 	"")
 		echo $(basename $0) version
+		echo $(basename $0) update
 		echo $(basename $0) env
 		echo $(basename $0) config ...
 		echo $(basename $0) secret-create
