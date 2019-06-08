@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.0
+		APPVERSION=0.1.1
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -202,8 +202,36 @@ case $1 in
 			done
 			cd - &> /dev/null
 			;;
-		"kubecopy")
-			vimdiff ~/.kube/config <(gpg -d ${SECRET}/config.enc)
+		"kube-config-context")
+			# read from secrets
+			server=$(gpg -d ${SECRET}/config.enc | \
+				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
+				jq '.clusters[] | select(.name=="kubernetes") | .cluster."server"' \
+			)
+			certificate_authority_data=$(gpg -d ${SECRET}/config.enc | \
+				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
+				jq '.clusters[] | select(.name=="kubernetes") | .cluster."certificate-authority-data"' \
+			)
+			client_certificate_data=$(gpg -d ${SECRET}/config.enc | \
+				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
+				jq '.users[] | select(.name=="kubernetes-admin") | .user."client-certificate-data"' \
+			)
+			client_key_data=$(gpg -d ${SECRET}/config.enc | \
+				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
+				jq '.users[] | select(.name=="kubernetes-admin") | .user."client-key-data"' \
+			)
+			# replace secrets in ~/.kube/config
+			# 1. replace value: https://stackoverflow.com/questions/29772676/update-one-value-in-array-of-dicts-using-jq
+			# 2. add object: https://unix.stackexchange.com/questions/460985/jq-add-objects-from-file-into-json-array
+			cat ~/.kube/config | \
+				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
+				jq 'del(.clusters[] | select (.name == "test_zerus"))' | \
+				jq 'del(.users[] | select (.name == "admin@test_zerus"))' | \
+				jq '.clusters[.clusters | length] |= . + {"name": "test_zerus", "cluster": {"certificate-authority-data": '${certificate_authority_data}', "server": '${server}'}}' | \
+				jq '.users[.users | length] += {"name": "admin@test_zerus", "user": {"client-certificate-data": '${client_certificate_data}', "client-key-data": '${client_key_data}'}}' | \
+				python -c 'import sys, yaml, json; yaml.safe_dump(json.load(sys.stdin), sys.stdout, default_flow_style=False)' \
+				> ~/.kube/config
+			kubectl config use-context test-zerus
 			;;
 		esac
 		;;
@@ -212,7 +240,14 @@ case $1 in
 		echo $(basename $0) nodes
 		echo $(basename $0) "network [up/down/status] [nodes]"
 		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
-		echo $(basename $0) kubecopy
+		echo $(basename $0) "kube-config-context"
+		echo ""
+		echo "Use sequence:"
+		echo "0. $(basename $0) config ..."
+		echo "1. $(basename $0) preflight"
+		echo "2. $(basename $0) secret-create [INIT_OPTIONS]"
+		echo "3. $(basename $0) join"
+		echo "4. $(basename $0) kube-config-context"
 		;;
 esac
 
