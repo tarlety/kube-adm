@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.1
+		APPVERSION=0.1.2
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -225,10 +225,12 @@ case $1 in
 			# 2. add object: https://unix.stackexchange.com/questions/460985/jq-add-objects-from-file-into-json-array
 			cat ~/.kube/config | \
 				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
-				jq 'del(.clusters[] | select (.name == "test_zerus"))' | \
-				jq 'del(.users[] | select (.name == "admin@test_zerus"))' | \
-				jq '.clusters[.clusters | length] |= . + {"name": "test_zerus", "cluster": {"certificate-authority-data": '${certificate_authority_data}', "server": '${server}'}}' | \
-				jq '.users[.users | length] += {"name": "admin@test_zerus", "user": {"client-certificate-data": '${client_certificate_data}', "client-key-data": '${client_key_data}'}}' | \
+				jq 'del(.contexts[] | select (.name == "test-zerus"))' | \
+				jq 'del(.clusters[] | select (.name == "test-zerus"))' | \
+				jq 'del(.users[] | select (.name == "admin@test-zerus"))' | \
+				jq '.clusters[.clusters | length] |= . + {"name": "test-zerus", "cluster": {"certificate-authority-data": '${certificate_authority_data}', "server": '${server}'}}' | \
+				jq '.users[.users | length] += {"name": "admin@test-zerus", "user": {"client-certificate-data": '${client_certificate_data}', "client-key-data": '${client_key_data}'}}' | \
+				jq '.contexts[.contexts | length] += {"name": "test-zerus", "context": {"user": "admin@test-zerus", "cluster": "test-zerus"}}' | \
 				python -c 'import sys, yaml, json; yaml.safe_dump(json.load(sys.stdin), sys.stdout, default_flow_style=False)' \
 				> ~/.kube/config
 			kubectl config use-context test-zerus
