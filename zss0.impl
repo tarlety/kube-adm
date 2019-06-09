@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.3
+		APPVERSION=0.1.4
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -30,6 +30,7 @@ case $1 in
 	"requirement")
 		echo - node-adm: $(${NODEADM}/zss0 version)
 		echo - kubectl: $(which kubectl)
+		echo - sponge: $(which sponge)
 		;;
 	"secret-create")
 		shift
@@ -231,8 +232,8 @@ case $1 in
 				jq '.clusters[.clusters | length] |= . + {"name": "test-zerus", "cluster": {"certificate-authority-data": '${certificate_authority_data}', "server": '${server}'}}' | \
 				jq '.users[.users | length] += {"name": "admin@test-zerus", "user": {"client-certificate-data": '${client_certificate_data}', "client-key-data": '${client_key_data}'}}' | \
 				jq '.contexts[.contexts | length] += {"name": "test-zerus", "context": {"user": "admin@test-zerus", "cluster": "test-zerus"}}' | \
-				python -c 'import sys, yaml, json; yaml.safe_dump(json.load(sys.stdin), sys.stdout, default_flow_style=False)' \
-				> ~/.kube/config
+				python -c 'import sys, yaml, json; yaml.safe_dump(json.load(sys.stdin), sys.stdout, default_flow_style=False)' | \
+				sponge ~/.kube/config
 			kubectl config use-context test-zerus
 			;;
 		esac
