@@ -221,6 +221,8 @@ case $1 in
 				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
 				jq '.users[] | select(.name=="kubernetes-admin") | .user."client-key-data"' \
 			)
+			# pre-condition: ~/.kube/config
+			[ ! -e ~/.kube/config ] && mkdir -p ~/.kube && cp ./templates/config ~/.kube/config
 			# replace secrets in ~/.kube/config
 			# 1. replace value: https://stackoverflow.com/questions/29772676/update-one-value-in-array-of-dicts-using-jq
 			# 2. add object: https://unix.stackexchange.com/questions/460985/jq-add-objects-from-file-into-json-array
