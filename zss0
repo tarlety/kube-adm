@@ -6,7 +6,7 @@
 #==============================================================================
 # Copyright (c) 2019, tarlety@gmail.com
 #
-# Zerus Scripting Standard v0.5.13
+# Zerus Scripting Standard v0.5.14
 #
 # This standard defines script state management framework.
 # Following this framework, you can manage app states in a consistent way.
@@ -17,7 +17,7 @@
 #
 # Commands:
 #
-#    env                Display all runtime environments, configurables, and required tools.
+#    env ...            Display all runtime environments, configurables, and required tools.
 #    config ...         Set configurations by this command.
 #    secret-create      Create new secrets.
 #    state [config/secret/data] [list/save/load] [state-name]
@@ -60,6 +60,9 @@
 #
 # Changelog:
 #
+#    v0.5.14:
+#       - new command 'env ...' to get config value
+#
 #    v0.5.13:
 #       - latest version checking
 #       - new command 'update' to fetch latest version
@@ -75,7 +78,7 @@
 #==============================================================================
 # Auto Update:
 
-ZSSVERSION=0.5.13
+ZSSVERSION=0.5.14
 REMOTE_RELEASE=https://raw.githubusercontent.com/tarlety/kube-apps-platform/master/zss0
 diff <(curl https://raw.githubusercontent.com/tarlety/kube-apps-platform/master/zss0 2>/dev/null) zss0 2>/dev/null 1>/dev/null || echo \
 "*************************************************************************
@@ -133,31 +136,48 @@ case $1 in
 		(wget ${REMOTE_RELEASE} -O $0 && chmod +x $0)&
 		;;
 	"env")
-		echo =========================================================================
-		echo "## NAME: ${PROJECTNAME}/${APPNAME}"
-		echo - ZSSVERSION: ${ZSSVERSION}
-		echo - APPVERSION: ${APPVERSION}
-		echo - STORE: ${STORE}
-		echo - SECRET: $(echo $(cat $SALT 2>/dev/null) $(cat ${SECRET}/* | sha256sum 2>/dev/null) | sha1sum | cut -c1-8)
-		for KEY in ${CONFIGKEYS}
-		do
-			KEY=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
+		shift
+		KEY=$1
+		if [ ! -z "${KEY}" ]; then
 			if [ "$(eval echo \${!${KEY}[@]})" == "0" ]; then
-				eval echo - ${KEY}: \${${KEY}}
+				eval echo \${${KEY}}
 			else
-				eval echo - ${KEY}: "{\${!${KEY}[@]}} -\> {\${${KEY}[@]}}"
+				eval HASHKEYS=\${!${KEY}[@]}
+				for HASHKEY in ${HASHKEYS}
+				do
+					echo -n '["'${HASHKEY}'"]="'
+					eval echo -n \"\${${KEY}[${HASHKEY}]}\"
+					echo -n '" '
+				done
+				echo
 			fi
-		done
-		echo - GPGKEY: ${GPGKEY} $(gpg -k ${GPGKEY} 2>/dev/null | sed -n '2p' | xargs)
-		echo "## REQUIREMENT:"
-		# AppImplementing Section: requirement
-		#------------------------------------------------------------------------------
-		source ./zss0.impl requirement
-		#------------------------------------------------------------------------------
-		echo - gpg: $(which gpg)
-		echo - tar: $(which tar)
-		echo - colordiff: $(which colordiff)
-		echo =========================================================================
+		else
+			echo =========================================================================
+			echo "## NAME: ${PROJECTNAME}/${APPNAME}"
+			echo - ZSSVERSION: ${ZSSVERSION}
+			echo - APPVERSION: ${APPVERSION}
+			echo - STORE: ${STORE}
+			echo - SECRET: $(echo $(cat $SALT 2>/dev/null) $(cat ${SECRET}/* | sha256sum 2>/dev/null) | sha1sum | cut -c1-8)
+			for KEY in ${CONFIGKEYS}
+			do
+				KEY=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
+				if [ "$(eval echo \${!${KEY}[@]})" == "0" ]; then
+					eval echo - ${KEY}: \${${KEY}}
+				else
+					eval echo - ${KEY}: "{\${!${KEY}[@]}} -\> {\${${KEY}[@]}}"
+				fi
+			done
+			echo - GPGKEY: ${GPGKEY} $(gpg -k ${GPGKEY} 2>/dev/null | sed -n '2p' | xargs)
+			echo "## REQUIREMENT:"
+			# AppImplementing Section: requirement
+			#------------------------------------------------------------------------------
+			source ./zss0.impl requirement
+			#------------------------------------------------------------------------------
+			echo - gpg: $(which gpg)
+			echo - tar: $(which tar)
+			echo - colordiff: $(which colordiff)
+			echo =========================================================================
+		fi
 		;;
 	"config")
 		shift
@@ -295,7 +315,7 @@ case $1 in
 	"")
 		echo $(basename $0) version
 		echo $(basename $0) update
-		echo $(basename $0) env
+		echo $(basename $0) env ...
 		echo $(basename $0) config ...
 		echo $(basename $0) secret-create
 		echo $(basename $0) "state [list/save/load] [config/secret/data] [state_name, ex: date-stage-env]"
