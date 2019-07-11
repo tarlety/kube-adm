@@ -254,8 +254,9 @@ case $1 in
 		echo "0. $(basename $0) config ..."
 		echo "1. $(basename $0) preflight"
 		echo "2. $(basename $0) secret-create [INIT_OPTIONS]"
-		echo "3. $(basename $0) join"
-		echo "4. $(basename $0) kube-config-context"
+		echo "3. $(basename $0) network up"
+		echo "4. $(basename $0) join"
+		echo "5. $(basename $0) kube-config-context"
 		;;
 esac
 
