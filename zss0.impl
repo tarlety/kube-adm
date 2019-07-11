@@ -101,14 +101,14 @@ case $1 in
 					if [[ ${MASTERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
 						for MASTER in ${MASTERS}
 						do
-							MASTERIP=$(grep "[\t ]*${MASTER}[ $]" /etc/hosts | head -1 | cut -d' ' -f1)
+							MASTERIP=$(grep "[\t ]*${MASTER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 							./zss0 exec ${NODE} "
 								sudo ufw allow from ${MASTERIP} to any proto tcp port 6443,2379:2380,10250 comment 'kube-adm' ;
 								"
 						done
 						for WORKER in ${WORKERS}
 						do
-							WORKERIP=$(grep "[\t ]*${WORKER}[ $]" /etc/hosts | head -1 | cut -d' ' -f1)
+							WORKERIP=$(grep "[\t ]*${WORKER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 							./zss0 exec ${NODE} "
 								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
 								"
@@ -118,7 +118,7 @@ case $1 in
 					if [[ ${WORKERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
 						for MASTER in ${MASTERS}
 						do
-							MASTERIP=$(grep "[\t ]*${MASTER}[ $]" /etc/hosts | head -1 | cut -d' ' -f1)
+							MASTERIP=$(grep "[\t ]*${MASTER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 							./zss0 exec ${NODE} "
 								sudo ufw allow from ${MASTERIP} to any proto tcp port 10250 comment 'kube-adm' ;
 								"
