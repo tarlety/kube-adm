@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.4
+		APPVERSION=0.1.5
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -206,7 +206,7 @@ case $1 in
 		"kube-config-context")
 			shift
 			CLUSTER_NAME=${1:-test-zerus}
-			ACCOUNT_NAME=${1:-admin@test-zerus}
+			ACCOUNT_NAME=${2:-admin@test-zerus}
 			# read from secrets
 			server=$(gpg -d ${SECRET}/config.enc | \
 				python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' | \
