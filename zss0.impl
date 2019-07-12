@@ -110,7 +110,7 @@ case $1 in
 						do
 							WORKERIP=$(grep "[\t ]*${WORKER}[ $]" /etc/hosts | head -1 | cut -d' ' -f1)
 							./zss0 exec ${NODE} "
-								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
+								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443,8472 comment 'kube-adm' ;
 								"
 						done
 					fi
