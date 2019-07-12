@@ -110,7 +110,8 @@ case $1 in
 						do
 							WORKERIP=$(grep -P "[\t ]*${WORKER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 							./zss0 exec ${NODE} "
-								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443,8472 comment 'kube-adm' ;
+								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
+								sudo ufw allow from ${WORKERIP} to any proto udp port 8472 comment 'kube-adm' ;
 								"
 						done
 					fi
@@ -121,6 +122,13 @@ case $1 in
 							MASTERIP=$(grep -P "[\t ]*${MASTER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 							./zss0 exec ${NODE} "
 								sudo ufw allow from ${MASTERIP} to any proto tcp port 10250 comment 'kube-adm' ;
+								"
+						done
+						for WORKER in ${WORKERS}
+						do
+							WORKERIP=$(grep -P "[\t ]*${WORKER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
+							./zss0 exec ${NODE} "
+								sudo ufw allow from ${WORKERIP} to any proto udp port 8472 comment 'kube-adm' ;
 								"
 						done
 					fi
