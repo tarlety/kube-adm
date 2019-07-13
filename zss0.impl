@@ -189,13 +189,11 @@ case $1 in
 		"leave")
 			shift
 			NODES=${*:-${WORKERS}}
-			cd ${NODEADM}
 			for NODE in ${NODES}
 			do
 				kubectl drain ${NODE} --delete-local-data --force --ignore-daemonsets
 				kubectl delete node ${NODE}
 			done
-			cd - &> /dev/null
 			;;
 		"clean")
 			shift
