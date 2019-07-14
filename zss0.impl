@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.5
+		APPVERSION=0.1.6
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -56,10 +56,10 @@ case $1 in
 
 				./zss0 exec ${NODE} 'sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config'
 
-				# https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/flannel
-				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.7/manifests/canal.yaml'
+				# https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/flannel
+				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.8/manifests/canal.yaml'
 
-				# optional: https://docs.projectcalico.org/v3.7/getting-started/kubernetes/installation/app-layer-policy
+				# optional: https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/app-layer-policy
 			fi
 		done
 		cd - &> /dev/null
@@ -81,12 +81,16 @@ case $1 in
 			;;
 		"network")
 			# ref: https://kubernetes.io/docs/setup/independent/install-kubeadm/
-			# master port requirement:
+			#  master port requirement:
 			#  - 6443: master and worker
 			#  - 2379-2380: master
 			#  - 10250: master
-			# worker port requirement:
+			#  worker port requirement:
 			#  - 10250: master
+			# ref: https://docs.projectcalico.org/v3.8/getting-started/kubernetes/requirements
+			#  Bidirectional:
+			#  - 179: calico networking (BGP)
+			#  - 4789: flannel networking (VXLAN)
 			shift
 			ONOFF=$1
 			shift
@@ -97,41 +101,16 @@ case $1 in
 			do
 				case ${ONOFF} in
 				"up")
-					# if NODE is MASTER
-					if [[ ${MASTERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
-						for MASTER in ${MASTERS}
-						do
-							MASTERIP=$(grep -P "[\t ]*${MASTER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
-							./zss0 exec ${NODE} "
-								sudo ufw allow from ${MASTERIP} to any proto tcp port 6443,2379:2380,10250 comment 'kube-adm' ;
-								"
-						done
-						for WORKER in ${WORKERS}
-						do
-							WORKERIP=$(grep -P "[\t ]*${WORKER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
-							./zss0 exec ${NODE} "
-								sudo ufw allow from ${WORKERIP} to any proto tcp port 6443 comment 'kube-adm' ;
-								sudo ufw allow from ${WORKERIP} to any proto udp port 8472 comment 'kube-adm' ;
-								"
-						done
-					fi
-					# if NODE is WORKER
-					if [[ ${WORKERS} =~ (^|[[:space:]])${NODE}($|[[:space:]]) ]]; then
-						for MASTER in ${MASTERS}
-						do
-							MASTERIP=$(grep -P "[\t ]*${MASTER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
-							./zss0 exec ${NODE} "
-								sudo ufw allow from ${MASTERIP} to any proto tcp port 10250 comment 'kube-adm' ;
-								"
-						done
-						for WORKER in ${WORKERS}
-						do
-							WORKERIP=$(grep -P "[\t ]*${WORKER}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
-							./zss0 exec ${NODE} "
-								sudo ufw allow from ${WORKERIP} to any proto udp port 8472 comment 'kube-adm' ;
-								"
-						done
-					fi
+					for SRC in ${NODES}
+					do
+						SRCIP=$(grep -P "[\t ]*${SRC}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
+						./zss0 exec ${NODE} "
+							sudo ufw allow from ${SRCIP} proto tcp to any port 6443,2379:2380,10250 comment 'kube-adm' ;
+							sudo ufw allow from ${SRCIP} port 6443,2379:2380,10250 proto tcp to any comment 'kube-adm' ;
+							sudo ufw allow from ${SRCIP} proto tcp to any port 179,4789 comment 'kube-adm' ;
+							sudo ufw allow from ${SRCIP} port 179,4789 proto tcp to any comment 'kube-adm' ;
+							"
+					done
 					;;
 				"down")
 					RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep kube-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
@@ -206,6 +185,7 @@ case $1 in
 					sudo kubeadm reset -f ;
 					sudo apt-mark unhold kubelet kubeadm kubectl ;
 					sudo apt remove -y kubelet kubeadm kubectl ;
+					sudo mv /var/lib/etcd/member /var/lib/etcd/member-$(date +%Y%m%d%H%M%S) ;
 					"
 			done
 			cd - &> /dev/null
@@ -257,13 +237,17 @@ case $1 in
 		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
 		echo $(basename $0) "kube-config-context [cluster_name] [account_name] "
 		echo ""
-		echo "Use sequence:"
+		echo "How to Bootstrap:"
 		echo "0. $(basename $0) config ..."
 		echo "1. $(basename $0) preflight"
 		echo "2. $(basename $0) secret-create [INIT_OPTIONS]"
 		echo "3. $(basename $0) network up"
 		echo "4. $(basename $0) join"
 		echo "5. $(basename $0) kube-config-context"
+		echo ""
+		echo "How to Cleanup:"
+		echo "0. $(basename $0) leave"
+		echo "1. $(basename $0) clean"
 		;;
 esac
 
