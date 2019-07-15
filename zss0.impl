@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.6
+		APPVERSION=0.1.7
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -19,7 +19,7 @@ case $1 in
 			["workers"]="the worker nodes of kubernetes cluster." \
 			)
 
-		DEFAULT_KUBERNETES_VERSION='=1.14.2-00'
+		DEFAULT_KUBERNETES_VERSION='=1.15.0-00'
 		DEFAULT_NETWORK=10.244.0.0/16
 		DEFAULT_NODEADM=../node-adm
 		DEFAULT_MASTERS="u1"
@@ -91,6 +91,9 @@ case $1 in
 			#  Bidirectional:
 			#  - 179: calico networking (BGP)
 			#  - 4789: flannel networking (VXLAN)
+			# ref: https://github.com/coreos/flannel/blob/master/Documentation/troubleshooting.md
+			#  - UDP 8285 (udp backend)
+			#  - UDP 8472 (vxlan backend)
 			shift
 			ONOFF=$1
 			shift
@@ -109,6 +112,8 @@ case $1 in
 							sudo ufw allow from ${SRCIP} port 6443,2379:2380,10250 proto tcp to any comment 'kube-adm' ;
 							sudo ufw allow from ${SRCIP} proto tcp to any port 179,4789 comment 'kube-adm' ;
 							sudo ufw allow from ${SRCIP} port 179,4789 proto tcp to any comment 'kube-adm' ;
+							sudo ufw allow from ${SRC} to any proto udp port 8285,8472 comment 'kube-adm' ;
+							sudo ufw allow from ${SRC} port 8285,8472 proto udp to any comment 'kube-adm' ;
 							"
 					done
 					;;
