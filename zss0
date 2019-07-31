@@ -60,6 +60,9 @@
 #
 # Changelog:
 #
+#    v0.6.0:
+#       - version control including git commit.
+#
 #    v0.5.14:
 #       - new command 'env ...' to get config value
 #
@@ -78,7 +81,7 @@
 #==============================================================================
 # Auto Update:
 
-ZSSVERSION=0.5.14
+ZSSVERSION=0.6.0
 REMOTE_RELEASE=https://raw.githubusercontent.com/tarlety/kube-apps-platform/master/zss0
 diff <(curl https://raw.githubusercontent.com/tarlety/kube-apps-platform/master/zss0 2>/dev/null) zss0 2>/dev/null 1>/dev/null || echo \
 "*************************************************************************
@@ -130,7 +133,7 @@ source ./zss0.impl vars
 
 case $1 in
 	"version")
-		echo ${ZSSVERSION} ${APPVERSION}
+		echo ${ZSSVERSION} ${APPVERSION} $(git log --format="%H" -n 1)
 		;;
 	"update")
 		(wget ${REMOTE_RELEASE} -O $0 && chmod +x $0)&
@@ -154,8 +157,7 @@ case $1 in
 		else
 			echo =========================================================================
 			echo "## NAME: ${PROJECTNAME}/${APPNAME}"
-			echo - ZSSVERSION: ${ZSSVERSION}
-			echo - APPVERSION: ${APPVERSION}
+			echo "- VERSION: $($0 version)"
 			echo - STORE: ${STORE}
 			echo - SECRET: $(echo $(cat $SALT 2>/dev/null) $(cat ${SECRET}/* | sha256sum 2>/dev/null) | sha1sum | cut -c1-8)
 			for KEY in ${CONFIGKEYS}
