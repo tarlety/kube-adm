@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.8
+		APPVERSION=0.1.9
 		;;
 	"config")
 		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
@@ -253,6 +253,12 @@ case $1 in
 		echo "How to Cleanup:"
 		echo "0. $(basename $0) leave"
 		echo "1. $(basename $0) clean"
+		echo ""
+		echo "How to Join new node:"
+		echo "0. $(basename $0) config workers [nodes]"
+		echo "1. $(basename $0) network up"
+		echo "2. $(basename $0) preflight [node]"
+		echo "3. $(basename $0) join [node]"
 		;;
 esac
 
