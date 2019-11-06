@@ -6,10 +6,10 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=kube-adm
-		APPVERSION=0.1.9
+		APPVERSION=0.2.0
 		;;
 	"config")
-		CONFIGKEYS="kubernetes_version network nodeadm masters workers"
+		CONFIGKEYS="kubernetes_version network nodeadm masters workers apivip"
 		declare -A CONFIG_DESCRIPTIONS
 		CONFIG_DESCRIPTIONS=( \
 			["kubernetes_version"]="the apt package version of kubeadm; empty or with leading '='." \
@@ -17,18 +17,20 @@ case $1 in
 			["nodeadm"]="the ctrl command to control all nodes." \
 			["masters"]="the master nodes of kubernetes cluster." \
 			["workers"]="the worker nodes of kubernetes cluster." \
+			["apivip"]="the vip of api server." \
 			)
 
-		DEFAULT_KUBERNETES_VERSION='=1.15.0-00'
+		DEFAULT_KUBERNETES_VERSION='=1.16.2-00'
 		DEFAULT_NETWORK=10.244.0.0/16
 		DEFAULT_NODEADM=../node-adm
-		DEFAULT_MASTERS="u1"
-		DEFAULT_WORKERS="u2 u3 u4 u5"
+		DEFAULT_MASTERS="u1 u2 u3"
+		DEFAULT_WORKERS="u4 u5"
+		DEFAULT_APIVIP=10.13.13.201
 		;;
 	"vars")
 		;;
 	"requirement")
-		echo - node-adm: $(${NODEADM}/zss0 version)
+		echo - node-adm: $(cd ${NODEADM};./zss0 version)
 		echo - kubectl: $(which kubectl)
 		echo - sponge: $(which sponge)
 		;;
@@ -40,10 +42,16 @@ case $1 in
 		cd ${NODEADM}
 		for NODE in ${MASTERS}
 		do
+			NODEIP=$(grep -P "[\t ]*${NODE}( |$)" /etc/hosts | cut -d' ' -f1)
 			if [ ! -e ${SECRET}/init.enc ]
 			then
 				# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/
-				./zss0 exec ${NODE} "sudo kubeadm init --pod-network-cidr ${NETWORK} ${INIT_OPTIONS} 2>&1" \
+				./zss0 exec ${NODE} "sudo kubeadm init \
+						--pod-network-cidr ${NETWORK} \
+						--apiserver-advertise-address ${NODEIP} \
+						--control-plane-endpoint '${APIVIP}:6443' \
+						--upload-certs \
+						${INIT_OPTIONS} 2>&1" \
 					| gpg -ear ${GPGKEY} -o ${SECRET}/init.enc
 
 				./zss0 exec ${NODE} '
@@ -56,8 +64,8 @@ case $1 in
 
 				./zss0 exec ${NODE} 'sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config'
 
-				# https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/flannel
-				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.8/manifests/canal.yaml'
+				# https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/flannel
+				./zss0 exec ${NODE} 'kubectl apply -f https://docs.projectcalico.org/v3.10/manifests/canal.yaml'
 
 				# optional: https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/app-layer-policy
 			fi
@@ -158,16 +166,43 @@ case $1 in
 			wait
 			cd - &> /dev/null
 			;;
+		"master-join")
+			shift
+			NODES=${*:-${MASTERS}}
+			TOKEN=$(gpg -d ${SECRET}/init.enc | grep 'kubeadm join' | head -1 | rev | cut -d' ' -f2 | rev)
+			HASH=$(gpg -d ${SECRET}/init.enc | grep 'discovery-token-ca-cert-hash' | head -1 | rev | cut -d' ' -f2 | rev)
+			KEY=$(gpg -d ${SECRET}/init.enc | grep 'certificate-key' | head -1 | rev | cut -d' ' -f1 | rev)
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				NODEIP=$(grep -P "[\t ]*${NODE}( |$)" /etc/hosts | cut -d' ' -f1)
+				./zss0 exec ${NODE} "sudo kubeadm join \
+					${APIVIP}:6443 \
+					--token ${TOKEN} \
+					--discovery-token-ca-cert-hash ${HASH} \
+					--control-plane --certificate-key ${KEY} \
+					--apiserver-advertise-address ${NODEIP}
+					"
+
+				./zss0 exec ${NODE} '
+					mkdir -p \${HOME}/.kube ;
+					sudo cp -f /etc/kubernetes/admin.conf \${HOME}/.kube/config ;
+					'
+				./zss0 exec ${NODE} 'sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config'
+
+			done
+			cd - &> /dev/null
+			;;
 		"join")
 			shift
 			MASTER=$(echo ${MASTERS} | cut -d' ' -f1)
 			NODES=${*:-${WORKERS}}
-			TOKEN=$(gpg -d ${SECRET}/init.enc | grep 'kubeadm join' | rev| cut -d' ' -f2 | rev)
-			HASH=$(gpg -d ${SECRET}/init.enc  | grep 'discovery-token-ca-cert-hash' | rev | cut -d: -f1 | rev)
+			TOKEN=$(gpg -d ${SECRET}/init.enc | grep 'kubeadm join' | head -1 | rev | cut -d' ' -f2 | rev)
+			HASH=$(gpg -d ${SECRET}/init.enc | grep 'discovery-token-ca-cert-hash' | head -1 | rev | cut -d' ' -f2 | rev)
 			cd ${NODEADM}
 			for NODE in ${NODES}
 			do
-				./zss0 exec ${NODE} "sudo kubeadm join ${MASTER}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}"
+				./zss0 exec ${NODE} "sudo kubeadm join ${APIVIP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH}"
 			done
 			cd - &> /dev/null
 			;;
@@ -239,7 +274,9 @@ case $1 in
 	"usage")
 		echo $(basename $0) nodes
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[preflight/join/leave/clean] [nodes]"
+		echo $(basename $0) "[preflight] [nodes]"
+		echo $(basename $0) "[master-join] [masters]"
+		echo $(basename $0) "[join/leave/clean] [workers]"
 		echo $(basename $0) "kube-config-context [cluster_name] [account_name] "
 		echo ""
 		echo "How to Bootstrap:"
@@ -254,7 +291,13 @@ case $1 in
 		echo "0. $(basename $0) leave"
 		echo "1. $(basename $0) clean"
 		echo ""
-		echo "How to Join new node:"
+		echo "How to Join new master:"
+		echo "0. $(basename $0) config masters [nodes]"
+		echo "1. $(basename $0) network up"
+		echo "2. $(basename $0) preflight [node]"
+		echo "3. $(basename $0) master-join [node]"
+		echo ""
+		echo "How to Join new worker:"
 		echo "0. $(basename $0) config workers [nodes]"
 		echo "1. $(basename $0) network up"
 		echo "2. $(basename $0) preflight [node]"
